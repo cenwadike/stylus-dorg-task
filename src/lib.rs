@@ -53,8 +53,6 @@ sol_storage! {
 // Declare Erc20 interface
 sol_interface! {
     interface IErc20 {
-        function balanceOf(address) external view returns (uint256);
-        function approve(address,uint256) external returns (bool);
         function transfer(address,uint256) external;
         function transferFrom(address,address,uint256) external returns (bool);
     }
@@ -65,7 +63,6 @@ sol! {
     // Events for the Contract
     event Initialized();
     event MarketCreated(address indexed base_token, address indexed quote_token, uint256 exchange_rate);
-    event SwappedQuoteTokenForBaseToken(address indexed base_token, address indexed quote_token, uint256 amount_in, uint256 amount_out);
     event SwappedBaseTokenForQuoteToken(address indexed base_token, address indexed quote_token, uint256 amount_in, uint256 amount_out);
 
     // Error types for the Contract
@@ -77,8 +74,6 @@ sol! {
     error AmountCanNotBeZero();
     error DivisionUnderflow();
     error MultiplicationOverflow();
-    error BaseTokenTransferFailed();
-    error QuoteTokenTransferFailed();
     error OutOfBoundIndex();
 }
 
@@ -93,8 +88,6 @@ pub enum ContractError {
     AmountCanNotBeZero(AmountCanNotBeZero),
     DivisionUnderflow(DivisionUnderflow),
     MultiplicationOverflow(MultiplicationOverflow),
-    BaseTokenTransferFailed(BaseTokenTransferFailed),
-    QuoteTokenTransferFailed(QuoteTokenTransferFailed),
     OutOfBoundIndex(OutOfBoundIndex),
 }
 
@@ -175,7 +168,7 @@ impl Contract {
         quote_token_map.set(current_market_index);
 
         // Set new market index
-        current_market_index = current_market_index + U64::from(1);
+        current_market_index += U64::from(1);
         self.market_index.set(current_market_index);
 
         // Emit event

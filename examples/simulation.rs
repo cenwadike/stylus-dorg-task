@@ -74,8 +74,6 @@ async fn main() -> eyre::Result<()> {
         r#"[
             function balanceOf(address) external view returns (uint256)
             function approve(address,uint256) external returns (bool)
-            function transfer(address,uint256) external
-            function transferFrom(address,address,uint256) external returns (bool)
         ]"#
     );
 
@@ -104,13 +102,12 @@ async fn main() -> eyre::Result<()> {
 
     // Initialize contract
     let initialization_status = contract.fetch_initialization_status().call().await?;
-    println!("Initialization Status = {:?}", initialization_status);
 
     if !initialization_status {
         let pending_initialization_tx = contract.initialize();
         if let Some(initialization_receipt) = pending_initialization_tx.send().await?.await? {
             println!(
-                "Initialized Contract Successfully With Transaction Hash: {:?}",
+                "Initialized Contract Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
                 initialization_receipt.transaction_hash
             );
         };
@@ -142,7 +139,7 @@ async fn main() -> eyre::Result<()> {
             .unwrap()
         {
             println!(
-                "Market Created Successfully With Transaction Hash: {:?}",
+                "Market Created Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
                 create_market_receipt.transaction_hash
             );
         };
@@ -190,7 +187,7 @@ async fn main() -> eyre::Result<()> {
         base_token_contract.approve(contract_address, U256::from(base_amount));
     if let Some(approve_base_receipt) = pending_approve_base_tx.send().await?.await? {
         println!(
-            "Approved Base Token Successfully With Transaction Hash: {:?}",
+            "Approved Base Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
             approve_base_receipt.transaction_hash
         );
     }
@@ -204,7 +201,7 @@ async fn main() -> eyre::Result<()> {
 
     if let Some(swap_base_for_quote_receipt) = pending_swap_base_for_quote_tx.send().await?.await? {
         println!(
-            "Swapped Base Token For Quote Token Successfully With Transaction Hash: {:?}",
+            "Swapped Base Token For Quote Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
             swap_base_for_quote_receipt.transaction_hash
         );
     }
