@@ -113,7 +113,7 @@ async fn main() -> eyre::Result<()> {
         };
     } else {
         println!("Contract Already Initialized");
-    }
+    };
 
     // Get current market index
     let current_market_index = contract.fetch_current_market_index().call().await?;
@@ -133,10 +133,8 @@ async fn main() -> eyre::Result<()> {
         );
         if let Some(create_market_receipt) = pending_create_market_tx
             .send()
-            .await
-            .unwrap()
-            .await
-            .unwrap()
+            .await?
+            .await?
         {
             println!(
                 "Market Created Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
@@ -160,7 +158,7 @@ async fn main() -> eyre::Result<()> {
         assert_eq!(base_token_address, base_token);
         assert_eq!(quote_token_address, quote_token);
         assert_eq!(U256::from(exchange_rate), rate);
-    }
+    };
 
     // Get contract token balances before swapping base for quote
     let initial_contract_base_token_balance_before_swap_base_for_quote = base_token_contract
@@ -190,7 +188,7 @@ async fn main() -> eyre::Result<()> {
             "Approved Base Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
             approve_base_receipt.transaction_hash
         );
-    }
+    };
 
     // Swap base token for quote token
     let pending_swap_base_for_quote_tx = contract.swap_base_token_for_quote_token(
@@ -198,13 +196,12 @@ async fn main() -> eyre::Result<()> {
         quote_token_address,
         U256::from(base_amount),
     );
-
     if let Some(swap_base_for_quote_receipt) = pending_swap_base_for_quote_tx.send().await?.await? {
         println!(
             "Swapped Base Token For Quote Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
             swap_base_for_quote_receipt.transaction_hash
         );
-    }
+    };
 
     // Get contract token balance after swap base for quote
     let final_contract_base_token_balance_after_swap_base_for_quote = base_token_contract

@@ -223,7 +223,7 @@ abigen!(
 let contract = Contract::new(contract_address, client);
 
 // Fetch initialization status
-let initialization_status = contract.fetchInitializationStatus().call().await;
+let initialization_status = contract.fetch_initialization_status().call().await?;
 
 // Initialize contract
 let pending_initialization_tx = contract.initialize();
@@ -235,30 +235,43 @@ if let Some(initialization_receipt) = pending_initialization_tx.send().await?.aw
 }
 
 // Create market
-let pending_create_market_tx =
-    contract.createMarket(base_token_address, quote_token_address, exchange_rate);
-if let Some(create_market_receipt) = pending_create_market_tx.send().await?.await? {
+let pending_create_market_tx = contract.create_market(
+    base_token_address,
+    quote_token_address,
+    U256::from(exchange_rate),
+);
+if let Some(create_market_receipt) = pending_create_market_tx
+    .send()
+    .await?
+    .await?
+{
     println!(
-        "Market Created Successfully With Receipt = {:?}",
-        create_market_receipt
+        "Market Created Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
+        create_market_receipt.transaction_hash
     );
-}
+};
 
 // Fetch current market index
-let current_market_index = contract.fetchCurrentMarketIndex().call().await;
+let current_market_index = contract.fetch_current_market_index().call().await?;
 
 // Fetch market
-let (base_token, quote_token, rate) = contract.fetchMarket(current_market_index).call().await;
+let (base_token, quote_token, rate) = contract
+    .fetch_market(current_market_index.as_u64())
+    .call()
+    .await?;
 
 // Swap base token for quote token
-let pending_swap_base_for_quote_tx =
-    contract.swapBaseTokenForQuoteToken(base_token_address, quote_token_address, base_amount);
+let pending_swap_base_for_quote_tx = contract.swap_base_token_for_quote_token(
+    base_token_address,
+    quote_token_address,
+    U256::from(base_amount),
+);
 if let Some(swap_base_for_quote_receipt) = pending_swap_base_for_quote_tx.send().await?.await? {
     println!(
-        "Swapped Base Token For Quote Token Successfully With Receipt = {:?}",
-        swap_base_for_quote_receipt
+        "Swapped Base Token For Quote Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
+        swap_base_for_quote_receipt.transaction_hash
     );
-}
+};
 ```
 
 Add private-key.txt file containing private key or an arbitrum testnet account.
