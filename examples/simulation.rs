@@ -91,9 +91,9 @@ async fn main() -> eyre::Result<()> {
     );
 
     // Test amount
-    let exchange_rate = 3;
-    let base_amount = 10;
-    let quote_amount = 30;
+    let exchange_rate = 3 ;
+    let base_amount = 10 * 10i128.pow(18);
+    let quote_amount = 30 * 10i128.pow(18);
 
     // Set up contracts
     let contract = Contract::new(contract_address, client.clone());
