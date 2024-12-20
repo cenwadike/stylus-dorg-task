@@ -196,7 +196,7 @@ To set up the project you need to deploy the following contract:
 ### Funding
 
 To prepare fixed-cost token sales contract, you need to fund the
-contract address with sufficient amount of base token and quote token
+contract address with sufficient amount of quote token.
 
 ## Calling The Program
 
