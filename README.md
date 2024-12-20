@@ -146,29 +146,11 @@ Compressed WASM size: 8.9 KB
 Program succeeded Stylus onchain activation checks with Stylus version: 1
 ```
 
-Next, we can estimate the gas costs to deploy and activate our program before we send our transaction. Check out the [cargo-stylus](https://github.com/OffchainLabs/cargo-stylus) README to see the different wallet options for this step:
-
-```bash
-cargo stylus deploy \
-  --private-key-path=<PRIVKEY_FILE_PATH> \
-  --estimate-gas
-```
-
-You will then see the estimated gas cost for deploying before transacting:
-
-```bash
-Deploying program to address e43a32b54e48c7ec0d3d9ed2d628783c23d65020
-Estimated gas for deployment: 1874876
-```
-
-The above only estimates gas for the deployment tx by default. To estimate gas for activation, first deploy your program using `--mode=deploy-only`, and then run `cargo stylus deploy` with the `--estimate-gas` flag, `--mode=activate-only`, and specify `--activate-program-address`.
-
-
 Here's how to deploy:
 
 ```bash
 cargo stylus deploy \
-  --private-key-path=<PRIVKEY_FILE_PATH>
+  --private-key-path=<PRIVKEY_FILE_PATH> --endpoint=<RPC_ENDPOINT>
 ```
 
 The CLI will send 2 transactions to deploy and activate your program onchain.
@@ -255,7 +237,7 @@ let current_market_index = contract.fetch_current_market_index().call().await?;
 
 // Fetch market
 let (base_token, quote_token, rate) = contract
-    .fetch_market(current_market_index.as_u64())
+    .fetch_market(current_market_index.as_u64() - 1)
     .call()
     .await?;
 
