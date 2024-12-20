@@ -200,9 +200,9 @@ contract address with sufficient amount of quote token.
 
 ## Calling The Program
 
-This project includes an rust script of how to call and transact with the program in Rust using [ethers-rs](https://github.com/gakonst/ethers-rs) under the `scripts/task.rs`. However, your programs are also Ethereum ABI equivalent if using the Stylus SDK. **They can be called and transacted with using any other Ethereum tooling.**
+This project includes an rust script of how to call and transact with the program in Rust using [ethers-rs](https://github.com/gakonst/ethers-rs) under the `examples/simulation.rs`. However, your programs are also Ethereum ABI equivalent if using the Stylus SDK. **They can be called and transacted with using any other Ethereum tooling.**
 
-By using the program address from your deployment step above, and your wallet, you can attempt to call the counter program and increase its value in storage:
+By using the program address from your deployment step above, and your wallet, you can attempt to call the program:
 
 ```rs
 abigen!(
@@ -273,7 +273,7 @@ if let Some(swap_base_for_quote_receipt) = pending_swap_base_for_quote_tx.send()
 };
 ```
 
-Add private-key.txt file containing private key or an arbitrum testnet account.
+Add private-key.txt file containing private key of an arbitrum testnet account.
 
 Before running, set the following env vars or place them in a `.env` file (see: [.env.example](./.env.example)) in this project:
 
