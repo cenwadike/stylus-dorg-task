@@ -5,7 +5,6 @@ The project implements a fixed-cost token sales contract.
 - User can create new market.
 - Market stores the base token, quote token and exchange rate.
 - User can swap base token for quote token.
-- User can swap quote token for base token.
 
 The program is ABI-equivalent with Solidity is shown below:
 
