@@ -1,14 +1,14 @@
 //!
-//! Stylus dOrg tech assessment
+//! Stylus dOrg tech assessment.
 //!
 //! The following contract implements a fixed-cost token sales contract.
 //!
-//! - User can create new market.
-//! - Market stores the base token, quote token and exchange rate.
+//! - User can create a new market.
+//! - Market stores the base token, quote token, and exchange rate.
 //! - User can swap base token for quote token.
 //! - User can swap quote token for base token.
 //!
-//! The program is ABI-equivalent with Solidity, which means you can call it from both Solidity and Rust.
+//! The program is ABI-equivalent with Solidity, meaning you can call it from Solidity and Rust.
 //! To do this, run `cargo stylus export-abi`.
 //!
 //! Note: this code is a technical task and has not been audited.
@@ -29,21 +29,21 @@ use stylus_sdk::{
 };
 
 // Define some persistent storage using the Solidity ABI.
-// `Contract` will be the entrypoint.
+// `Contract` will be the entry point.
 sol_storage! {
     #[entrypoint]
     pub struct Contract {
         // Initialization status
         bool initialized;
-        // Market index
+        // Market Index
         uint64 market_index;
         // Maps market index to Market data.
         mapping(uint64 => Market) markets;
-        // Maps base token and quote token address to market index.
+        // Maps base token and quote token address to a market index.
         mapping(address => mapping(address => uint64)) indexes;
     }
 
-    // Market consist of base token, quote token and market rate
+    // Market consists of a base token, quote token, and market rate
     pub struct Market {
         address base_token;     // eg. ETH in ETH/USDT
         address quote_token;    // eg. USDT in ETH/USDT
@@ -51,7 +51,7 @@ sol_storage! {
     }
 }
 
-// Declare Erc20 interface
+// Define Erc20 interface
 sol_interface! {
     interface IErc20 {
         function transfer(address,uint256) external;
@@ -59,7 +59,7 @@ sol_interface! {
     }
 }
 
-// Declare events and error types
+// Define events and error types
 sol! {
     // Events for the Contract
     event Initialized();
@@ -101,7 +101,7 @@ pub enum ContractError {
 impl Contract {
     /// Initialize contract.
     pub fn initialize(&mut self) -> Result<(), ContractError> {
-        // Ensure contract has not being initialized
+        // Ensure the contract has not been initialized.
         if self.initialized.get() {
             return Err(ContractError::AlreadyInitialized(AlreadyInitialized {}));
         }
@@ -109,7 +109,7 @@ impl Contract {
         // Set initialized.
         self.initialized.set(true);
 
-        // Initialize market index
+        // Initialize market index.
         self.market_index.set(U64::from(1));
 
         // Emit event
@@ -118,7 +118,7 @@ impl Contract {
         Ok(())
     }
 
-    /// Create new market.
+    /// Create a new market.
     ///
     /// Return market index.
     pub fn create_market(
@@ -129,42 +129,42 @@ impl Contract {
         base_amount: U256,   // eg. 2.
         quote_amount: U256,  // eg. base_amount * rate; 2 * 3 = 6.
     ) -> Result<U256, ContractError> {
-        // Ensures rate is not 0
+        // Ensures rate is not 0.
         if exchange_rate == U256::from(0) {
             return Err(ContractError::ExchangeRateCanNotBeZero(
                 ExchangeRateCanNotBeZero {},
             ));
         }
 
-        // Ensures base token address is not a zero address
+        // Ensures the base token address is not a zero address.
         if base_token == Address::ZERO {
             return Err(ContractError::BaseTokenCanNotBeZeroAddress(
                 BaseTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Ensures quote token address is not a zero address
+        // Ensures the quote token address is not a zero address.
         if quote_token == Address::ZERO {
             return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
                 QuoteTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Safely unwrap calculated base token amount
+        // Safely unwrap the calculated base token amount.
         let expected_base_amount = quote_amount.checked_div(exchange_rate);
         if expected_base_amount.is_none() {
             return Err(ContractError::DivisionUnderflow(DivisionUnderflow {}));
         }
 
-        // Safely unwrap calculated base token amount
+        // Safely unwrap the calculated base token amount.
         let expected_base_amount = expected_base_amount.unwrap();
 
-        // Ensure correct amount of base token was supplied.
+        // Ensure the correct amount of base token was supplied.
         if base_amount.ne(&expected_base_amount) {
             return Err(ContractError::IncorrectBaseAmount(IncorrectBaseAmount {}));
         }
 
-        // Calculate expected base token amount
+        // Calculate the expected base token amount.
         let expected_quote_amount = base_amount.checked_mul(exchange_rate);
         if expected_quote_amount.is_none() {
             return Err(ContractError::MultiplicationOverflow(
@@ -172,7 +172,7 @@ impl Contract {
             ));
         }
 
-        // Safely unwrap calculated quote token amount
+        // Safely unwrap the calculated quote token amount.
         let expected_quote_amount = expected_quote_amount.unwrap();
 
         // Assert enough quote token was supplied.
@@ -180,31 +180,31 @@ impl Contract {
             return Err(ContractError::IncorrectQuoteAmount(IncorrectQuoteAmount {}));
         }
 
-        // Get current market index
+        // Get the current market index.
         let mut current_market_index = self.market_index.get();
 
-        // Ensure market does not exist
+        // Ensure the market does not exist.
         let mut base_token_map = self.indexes.setter(base_token);
         let quote_token_map = base_token_map.setter(quote_token);
         let market_index = quote_token_map.get();
 
-        // Return error if market exists
+        // Return error if the market exists.
         if !market_index.is_zero() {
             return Err(ContractError::MarketExists(MarketExists {}));
         }
 
-        // Create new market in storage
+        // Create a new market in storage.
         let mut market = self.markets.setter(current_market_index);
         market.base_token.set(base_token);
         market.quote_token.set(quote_token);
         market.exchange_rate.set(exchange_rate);
 
-        // Map (base_token_address, quote_token_address) => market_index
+        // Map (base_token_address, quote_token_address) => market_index.
         let mut base_token_map = self.indexes.setter(base_token);
         let mut quote_token_map = base_token_map.setter(quote_token);
         quote_token_map.set(current_market_index);
 
-        // Set new market index
+        // Set new market index.
         current_market_index += U64::from(1);
         self.market_index.set(current_market_index);
 
@@ -218,14 +218,14 @@ impl Contract {
         let _ =
             quote_token_contract.transfer_from(Call::new(), msg::sender(), address(), quote_amount);
 
-        // Emit event
+        // Emit event.
         evm::log(MarketCreated {
             base_token,
             quote_token,
             exchange_rate,
         });
 
-        // Return market index
+        // Return market index.
         Ok(U256::from(current_market_index))
     }
 
@@ -236,26 +236,26 @@ impl Contract {
         quote_token: Address,
         base_amount: U256,
     ) -> Result<(), ContractError> {
-        // Ensures amount is not 0
+        // Ensures base amount is not 0.
         if base_amount == U256::from(0) {
             return Err(ContractError::AmountCanNotBeZero(AmountCanNotBeZero {}));
         }
 
-        // Ensures base token address is not a zero address
+        // Ensures base token address is not a zero address.
         if base_token == Address::ZERO {
             return Err(ContractError::BaseTokenCanNotBeZeroAddress(
                 BaseTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Ensures quote token address is not a zero address
+        // Ensures quote token address is not a zero address.
         if quote_token == Address::ZERO {
             return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
                 QuoteTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Get market from base token and quote token
+        // Get market from the base token and quote token.
         let mut base_token_map = self.indexes.setter(base_token);
         let quote_token_map = base_token_map.setter(quote_token);
         let market_index = quote_token_map.get();
@@ -266,7 +266,7 @@ impl Contract {
         // Get market rate.
         let exchange_rate = market.exchange_rate.get();
 
-        // Calculate quote token amount.
+        // Calculate the quote token amount.
         let quote_amount = base_amount.checked_mul(exchange_rate);
 
         // Return overflow error.
@@ -276,7 +276,7 @@ impl Contract {
             ));
         }
 
-        // Safely unwrap quote amount.
+        // Safely unwrap the quote amount.
         let quote_amount = quote_amount.unwrap();
 
         // Transfer base token from user.
@@ -307,26 +307,26 @@ impl Contract {
         quote_token: Address,
         quote_amount: U256,
     ) -> Result<(), ContractError> {
-        // Ensures amount is not 0
+        // Ensures amount is not 0.
         if quote_amount == U256::from(0) {
             return Err(ContractError::AmountCanNotBeZero(AmountCanNotBeZero {}));
         }
 
-        // Ensures base token address is not a zero address
+        // Ensures the base token address is not a zero address.
         if base_token == Address::ZERO {
             return Err(ContractError::BaseTokenCanNotBeZeroAddress(
                 BaseTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Ensures quote token address is not a zero address
+        // Ensures the quote token address is not a zero address.
         if quote_token == Address::ZERO {
             return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
                 QuoteTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Get market from base token and quote token
+        // Get market from the base token and quote token.
         let mut base_token_map = self.indexes.setter(base_token);
         let quote_token_map = base_token_map.setter(quote_token);
         let market_index = quote_token_map.get();
@@ -337,7 +337,7 @@ impl Contract {
         // Get market rate.
         let exchange_rate = market.exchange_rate.get();
 
-        // Calculate quote token amount.
+        // Calculate the base token amount.
         let base_amount = quote_amount.checked_div(exchange_rate);
 
         // Return overflow error.
@@ -345,7 +345,7 @@ impl Contract {
             return Err(ContractError::DivisionUnderflow(DivisionUnderflow {}));
         }
 
-        // Safely unwrap quote amount.
+        // Safely unwrap the quote amount.
         let base_amount = base_amount.unwrap();
 
         // Transfer quote token to contract.
@@ -377,21 +377,21 @@ impl Contract {
         base_token: Address,
         quote_token: Address,
     ) -> Result<U256, ContractError> {
-        // Ensures base token address is not a zero address
+        // Ensures base token address is not a zero address.
         if base_token == Address::ZERO {
             return Err(ContractError::BaseTokenCanNotBeZeroAddress(
                 BaseTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Ensures quote token address is not a zero address
+        // Ensures quote token address is not a zero address.
         if quote_token == Address::ZERO {
             return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
                 QuoteTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Get market from base token and quote token.
+        // Get market from the base token and quote token.
         let base_token_map = self.indexes.getter(base_token);
         let quote_token_map = base_token_map.getter(quote_token);
         let market_index = quote_token_map.get();
@@ -399,7 +399,7 @@ impl Contract {
         // Get market.
         let market = self.markets.get(market_index);
 
-        // Get exchange rate.
+        // Get the exchange rate.
         let exchange_rate = market.exchange_rate.get();
 
         Ok(exchange_rate)
@@ -411,21 +411,21 @@ impl Contract {
         base_token: Address,
         quote_token: Address,
     ) -> Result<U256, ContractError> {
-        // Ensures base token address is not a zero address
+        // Ensures the base token address is not a zero address.
         if base_token == Address::ZERO {
             return Err(ContractError::BaseTokenCanNotBeZeroAddress(
                 BaseTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Ensures quote token address is not a zero address
+        // Ensures the quote token address is not a zero address.
         if quote_token == Address::ZERO {
             return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
                 QuoteTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Get market from base token and quote token.
+        // Get market from the base token and quote token.
         let base_token_map = self.indexes.getter(base_token);
         let quote_token_map = base_token_map.getter(quote_token);
         let market_index = quote_token_map.get();
@@ -433,27 +433,27 @@ impl Contract {
         Ok(U256::from(market_index))
     }
 
-    /// Fetch market index.
+    /// Fetch market by tokens.
     pub fn fetch_market_by_tokens(
         &self,
         base_token: Address,
         quote_token: Address,
     ) -> Result<(Address, Address, U256), ContractError> {
-        // Ensures base token address is not a zero address
+        // Ensures the base token address is not a zero address.
         if base_token == Address::ZERO {
             return Err(ContractError::BaseTokenCanNotBeZeroAddress(
                 BaseTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Ensures quote token address is not a zero address
+        // Ensures the quote token address is not a zero address.
         if quote_token == Address::ZERO {
             return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
                 QuoteTokenCanNotBeZeroAddress {},
             ));
         }
 
-        // Get market from base token and quote token.
+        // Get market from the base token and quote token.
         let base_token_map = self.indexes.getter(base_token);
         let quote_token_map = base_token_map.getter(quote_token);
         let market_index = quote_token_map.get();
@@ -476,7 +476,7 @@ impl Contract {
         &self,
         market_index: u64,
     ) -> Result<(Address, Address, U256), ContractError> {
-        // Ensure index is valid.
+        // Ensure the index is valid.
         if U64::from(market_index).ge(&self.market_index.get())
             || U64::from(market_index).eq(&U64::from(0))
         {
