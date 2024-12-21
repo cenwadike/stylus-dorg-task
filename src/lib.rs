@@ -6,6 +6,7 @@
 //! - User can create new market.
 //! - Market stores the base token, quote token and exchange rate.
 //! - User can swap base token for quote token.
+//! - User can swap quote token for base token.
 //!
 //! The program is ABI-equivalent with Solidity, which means you can call it from both Solidity and Rust.
 //! To do this, run `cargo stylus export-abi`.
@@ -72,6 +73,8 @@ sol! {
     error QuoteTokenCanNotBeZeroAddress();
     error ExchangeRateCanNotBeZero();
     error AmountCanNotBeZero();
+    error IncorrectBaseAmount();
+    error IncorrectQuoteAmount();
     error DivisionUnderflow();
     error MultiplicationOverflow();
     error OutOfBoundIndex();
@@ -86,6 +89,8 @@ pub enum ContractError {
     QuoteTokenCanNotBeZeroAddress(QuoteTokenCanNotBeZeroAddress),
     ExchangeRateCanNotBeZero(ExchangeRateCanNotBeZero),
     AmountCanNotBeZero(AmountCanNotBeZero),
+    IncorrectBaseAmount(IncorrectBaseAmount),
+    IncorrectQuoteAmount(IncorrectQuoteAmount),
     DivisionUnderflow(DivisionUnderflow),
     MultiplicationOverflow(MultiplicationOverflow),
     OutOfBoundIndex(OutOfBoundIndex),
@@ -120,7 +125,9 @@ impl Contract {
         &mut self,
         base_token: Address,
         quote_token: Address,
-        exchange_rate: U256,
+        exchange_rate: U256, // eg. 3.
+        base_amount: U256,   // eg. 2.
+        quote_amount: U256,  // eg. base_amount * rate; 2 * 3 = 6.
     ) -> Result<U256, ContractError> {
         // Ensures rate is not 0
         if exchange_rate == U256::from(0) {
@@ -141,6 +148,36 @@ impl Contract {
             return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
                 QuoteTokenCanNotBeZeroAddress {},
             ));
+        }
+
+        // Safely unwrap calculated base token amount
+        let expected_base_amount = quote_amount.checked_div(exchange_rate);
+        if expected_base_amount.is_none() {
+            return Err(ContractError::DivisionUnderflow(DivisionUnderflow {}));
+        }
+
+        // Safely unwrap calculated base token amount
+        let expected_base_amount = expected_base_amount.unwrap();
+
+        // Ensure correct amount of base token was supplied.
+        if base_amount.ne(&expected_base_amount) {
+            return Err(ContractError::IncorrectBaseAmount(IncorrectBaseAmount {}));
+        }
+
+        // Calculate expected base token amount
+        let expected_quote_amount = base_amount.checked_mul(exchange_rate);
+        if expected_quote_amount.is_none() {
+            return Err(ContractError::MultiplicationOverflow(
+                MultiplicationOverflow {},
+            ));
+        }
+
+        // Safely unwrap calculated quote token amount
+        let expected_quote_amount = expected_quote_amount.unwrap();
+
+        // Assert enough quote token was supplied.
+        if quote_amount.ne(&expected_quote_amount) {
+            return Err(ContractError::IncorrectQuoteAmount(IncorrectQuoteAmount {}));
         }
 
         // Get current market index
@@ -170,6 +207,16 @@ impl Contract {
         // Set new market index
         current_market_index += U64::from(1);
         self.market_index.set(current_market_index);
+
+        // Transfer base token from creator.
+        let base_token_contract = IErc20::new(market.base_token.get());
+        let _ =
+            base_token_contract.transfer_from(Call::new(), msg::sender(), address(), base_amount);
+
+        // Transfer quote token from creator.
+        let quote_token_contract = IErc20::new(market.quote_token.get());
+        let _ =
+            quote_token_contract.transfer_from(Call::new(), msg::sender(), address(), quote_amount);
 
         // Emit event
         evm::log(MarketCreated {
@@ -239,7 +286,8 @@ impl Contract {
 
         // Transfer quote token transfer to user.
         let quote_token_contract = IErc20::new(market.quote_token.get());
-        let _ = quote_token_contract.transfer(Call::new(), msg::sender(), quote_amount);
+        let _ =
+            quote_token_contract.transfer(Call::new(), msg::sender(), quote_amount);
 
         // Emit event.
         evm::log(SwappedBaseTokenForQuoteToken {
@@ -248,6 +296,67 @@ impl Contract {
             amount_in: base_amount,
             amount_out: quote_amount,
         });
+
+        Ok(())
+    }
+
+    /// Swap base token for quote token.
+    pub fn swap_quote_token_for_base_token(
+        &mut self,
+        base_token: Address,
+        quote_token: Address,
+        quote_amount: U256,
+    ) -> Result<(), ContractError> {
+        // Ensures amount is not 0
+        if quote_amount == U256::from(0) {
+            return Err(ContractError::AmountCanNotBeZero(AmountCanNotBeZero {}));
+        }
+
+        // Ensures base token address is not a zero address
+        if base_token == Address::ZERO {
+            return Err(ContractError::BaseTokenCanNotBeZeroAddress(
+                BaseTokenCanNotBeZeroAddress {},
+            ));
+        }
+
+        // Ensures quote token address is not a zero address
+        if quote_token == Address::ZERO {
+            return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
+                QuoteTokenCanNotBeZeroAddress {},
+            ));
+        }
+
+        // Get market from base token and quote token
+        let mut base_token_map = self.indexes.setter(base_token);
+        let quote_token_map = base_token_map.setter(quote_token);
+        let market_index = quote_token_map.get();
+
+        // Get market.
+        let market = self.markets.get(market_index);
+
+        // Get market rate.
+        let exchange_rate = market.exchange_rate.get();
+
+        // Calculate quote token amount.
+        let base_amount = quote_amount.checked_div(exchange_rate);
+
+        // Return overflow error.
+        if base_amount.is_none() {
+            return Err(ContractError::DivisionUnderflow(DivisionUnderflow {}));
+        }
+
+        // Safely unwrap quote amount.
+        let base_amount = base_amount.unwrap();
+
+        // Transfer quote token to contract.
+        let quote_token_contract = IErc20::new(market.quote_token.get());
+        let _ =
+            quote_token_contract.transfer_from(Call::new(), msg::sender(), address(), quote_amount);
+
+        // Transfer base token to user.
+        let base_token_contract = IErc20::new(market.base_token.get());
+        let _ =
+            base_token_contract.transfer(Call::new(), msg::sender(), base_amount);
 
         Ok(())
     }
@@ -268,6 +377,20 @@ impl Contract {
         base_token: Address,
         quote_token: Address,
     ) -> Result<U256, ContractError> {
+        // Ensures base token address is not a zero address
+        if base_token == Address::ZERO {
+            return Err(ContractError::BaseTokenCanNotBeZeroAddress(
+                BaseTokenCanNotBeZeroAddress {},
+            ));
+        }
+
+        // Ensures quote token address is not a zero address
+        if quote_token == Address::ZERO {
+            return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
+                QuoteTokenCanNotBeZeroAddress {},
+            ));
+        }
+
         // Get market from base token and quote token.
         let base_token_map = self.indexes.getter(base_token);
         let quote_token_map = base_token_map.getter(quote_token);
@@ -282,11 +405,74 @@ impl Contract {
         Ok(exchange_rate)
     }
 
-    /// Fetch market.
+    /// Fetch market index.
+    pub fn fetch_market_id(
+        &self,
+        base_token: Address,
+        quote_token: Address,
+    ) -> Result<U256, ContractError> {
+        // Ensures base token address is not a zero address
+        if base_token == Address::ZERO {
+            return Err(ContractError::BaseTokenCanNotBeZeroAddress(
+                BaseTokenCanNotBeZeroAddress {},
+            ));
+        }
+
+        // Ensures quote token address is not a zero address
+        if quote_token == Address::ZERO {
+            return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
+                QuoteTokenCanNotBeZeroAddress {},
+            ));
+        }
+
+        // Get market from base token and quote token.
+        let base_token_map = self.indexes.getter(base_token);
+        let quote_token_map = base_token_map.getter(quote_token);
+        let market_index = quote_token_map.get();
+
+        Ok(U256::from(market_index))
+    }
+
+    /// Fetch market index.
+    pub fn fetch_market_by_tokens(
+        &self,
+        base_token: Address,
+        quote_token: Address,
+    ) -> Result<(Address, Address, U256), ContractError> {
+        // Ensures base token address is not a zero address
+        if base_token == Address::ZERO {
+            return Err(ContractError::BaseTokenCanNotBeZeroAddress(
+                BaseTokenCanNotBeZeroAddress {},
+            ));
+        }
+
+        // Ensures quote token address is not a zero address
+        if quote_token == Address::ZERO {
+            return Err(ContractError::QuoteTokenCanNotBeZeroAddress(
+                QuoteTokenCanNotBeZeroAddress {},
+            ));
+        }
+
+        // Get market from base token and quote token.
+        let base_token_map = self.indexes.getter(base_token);
+        let quote_token_map = base_token_map.getter(quote_token);
+        let market_index = quote_token_map.get();
+
+        // Get market.
+        let market = self.markets.get(U64::from(market_index));
+
+        Ok((
+            market.base_token.get(),
+            market.quote_token.get(),
+            market.exchange_rate.get(),
+        ))
+    }
+
+    /// Fetch market by id.
     /// Useful for pagination.
     ///
     /// Return market (base_token, quote_token, exchange_rate).
-    pub fn fetch_market(
+    pub fn fetch_market_by_id(
         &self,
         market_index: u64,
     ) -> Result<(Address, Address, U256), ContractError> {

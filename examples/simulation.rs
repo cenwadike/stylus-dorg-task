@@ -81,19 +81,25 @@ async fn main() -> eyre::Result<()> {
         Contract,
         r#"[
             function initialize() external
-            function createMarket(address,address,uint256) external returns (uint256)
-            function swapBaseTokenForQuoteToken(address,address,uint256) external
+            function createMarket(address base_token, address quote_token, uint256 exchange_rate, uint256 base_amount, uint256 quote_amount) external returns (uint256)
+            function swapBaseTokenForQuoteToken(address base_token, address quote_token, uint256 base_amount) external
+            function swapQuoteTokenForBaseToken(address base_token, address quote_token, uint256 quote_amount) external
             function fetchInitializationStatus() external view returns (bool)
             function fetchCurrentMarketIndex() external view returns (uint256)
-            function fetchExchangeRate(address,address) external view returns (uint256)
-            function fetchMarket(uint64) external view returns (address,address,uint256)
+            function fetchExchangeRate(address base_token, address quote_token) external view returns (uint256)
+            function fetchMarketId(address base_token, address quote_token) external view returns (uint256)
+            function fetchMarketByTokens(address base_token, address quote_token) external view returns (address, address, uint256)
+            function fetchMarketById(uint64 market_index) external view returns (address, address, uint256)
         ]"#
     );
 
     // Test amount
-    let exchange_rate = 3 ;
-    let base_amount = 10 * 10i128.pow(18);
-    let quote_amount = 30 * 10i128.pow(18);
+    let exchange_rate = 3;
+    let base_amount = 100 * 10i128.pow(18);
+    let quote_amount = 300 * 10i128.pow(18);
+
+    let base_exchange_amount = 1 * 10i128.pow(18);
+    let quote_exchange_amount = 3 * 10i128.pow(18);
 
     // Set up contracts
     let contract = Contract::new(contract_address, client.clone());
@@ -118,24 +124,50 @@ async fn main() -> eyre::Result<()> {
     // Get current market index
     let current_market_index = contract.fetch_current_market_index().call().await?;
 
-    // Check if market exist
+    // Get market from id
     let market = contract
-        .fetch_market(current_market_index.as_u64() - 1)
+        .fetch_market_by_id(current_market_index.as_u64() - 1)
+        .call()
+        .await;
+    
+    // Get market from tokens
+    let _market = contract
+        .fetch_market_by_tokens(base_token_address, quote_token_address)
         .call()
         .await;
 
+    // Check if market exist
     if market.is_err() {
+        // Approve contract to transfer base token
+        let pending_approve_base_tx =
+            base_token_contract.approve(contract_address, U256::from(base_amount));
+        if let Some(approve_base_receipt) = pending_approve_base_tx.send().await?.await? {
+            println!(
+                "Approved Base Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
+                approve_base_receipt.transaction_hash
+            );
+        };
+
+        // Approve contract to transfer quote token
+        let pending_approve_quote_tx =
+            quote_token_contract.approve(contract_address, U256::from(quote_amount));
+        if let Some(approve_quote_receipt) = pending_approve_quote_tx.send().await?.await? {
+            println!(
+                "Approved Quote Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
+                approve_quote_receipt.transaction_hash
+            );
+        };
+
         // create market if it does not exist
         let pending_create_market_tx = contract.create_market(
             base_token_address,
             quote_token_address,
             U256::from(exchange_rate),
+            U256::from(base_amount),
+            U256::from(quote_amount),
         );
-        if let Some(create_market_receipt) = pending_create_market_tx
-            .send()
-            .await?
-            .await?
-        {
+
+        if let Some(create_market_receipt) = pending_create_market_tx.send().await?.await? {
             println!(
                 "Market Created Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
                 create_market_receipt.transaction_hash
@@ -150,7 +182,7 @@ async fn main() -> eyre::Result<()> {
 
         // Get newly created market
         let (base_token, quote_token, rate) = contract
-            .fetch_market(current_market_index.as_u64())
+            .fetch_market_by_tokens(base_token_address, quote_token_address)
             .call()
             .await?;
 
@@ -158,6 +190,8 @@ async fn main() -> eyre::Result<()> {
         assert_eq!(base_token_address, base_token);
         assert_eq!(quote_token_address, quote_token);
         assert_eq!(U256::from(exchange_rate), rate);
+    } else {
+        println!("Market already exist");
     };
 
     // Get contract token balances before swapping base for quote
@@ -182,7 +216,7 @@ async fn main() -> eyre::Result<()> {
 
     // Approve contract to transfer base token
     let pending_approve_base_tx =
-        base_token_contract.approve(contract_address, U256::from(base_amount));
+        base_token_contract.approve(contract_address, U256::from(base_exchange_amount));
     if let Some(approve_base_receipt) = pending_approve_base_tx.send().await?.await? {
         println!(
             "Approved Base Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
@@ -194,7 +228,7 @@ async fn main() -> eyre::Result<()> {
     let pending_swap_base_for_quote_tx = contract.swap_base_token_for_quote_token(
         base_token_address,
         quote_token_address,
-        U256::from(base_amount),
+        U256::from(base_exchange_amount),
     );
     if let Some(swap_base_for_quote_receipt) = pending_swap_base_for_quote_tx.send().await?.await? {
         println!(
@@ -214,11 +248,11 @@ async fn main() -> eyre::Result<()> {
         .await?;
 
     // Get user token balances after swap base for quote
-    let final_user_base_token_balance_before_swap_base_for_quote = base_token_contract
+    let final_user_base_token_balance_after_swap_base_for_quote = base_token_contract
         .balance_of(wallet.address())
         .call()
         .await?;
-    let final_user_quote_token_balance_before_swap_base_for_quote = quote_token_contract
+    let final_user_quote_token_balance_after_swap_base_for_quote = quote_token_contract
         .balance_of(wallet.address())
         .call()
         .await?;
@@ -226,21 +260,106 @@ async fn main() -> eyre::Result<()> {
     // assert correct contract balance change
     assert_eq!(
         final_contract_base_token_balance_after_swap_base_for_quote,
-        initial_contract_base_token_balance_before_swap_base_for_quote + U256::from(base_amount)
+        initial_contract_base_token_balance_before_swap_base_for_quote + base_exchange_amount
     );
     assert_eq!(
         final_contract_quote_token_balance_after_swap_base_for_quote,
-        initial_contract_quote_token_balance_before_swap_base_for_quote - quote_amount
+        initial_contract_quote_token_balance_before_swap_base_for_quote - quote_exchange_amount
     );
 
     // assert correct user balance change
     assert_eq!(
-        final_user_base_token_balance_before_swap_base_for_quote,
-        initial_user_base_token_balance_before_swap_base_for_quote - base_amount
+        final_user_base_token_balance_after_swap_base_for_quote,
+        initial_user_base_token_balance_before_swap_base_for_quote - base_exchange_amount
     );
     assert_eq!(
-        final_user_quote_token_balance_before_swap_base_for_quote,
-        initial_user_quote_token_balance_before_swap_base_for_quote + quote_amount
+        final_user_quote_token_balance_after_swap_base_for_quote,
+        initial_user_quote_token_balance_before_swap_base_for_quote + quote_exchange_amount
+    );
+
+    // Get contract token balances before swapping quote for base
+    let initial_contract_base_token_balance_before_swap_quote_for_base = base_token_contract
+        .balance_of(contract_address)
+        .call()
+        .await?;
+    let initial_contract_quote_token_balance_before_swap_quote_for_base = quote_token_contract
+        .balance_of(contract_address)
+        .call()
+        .await?;
+
+    // Get user token balances before swapping quote for base
+    let initial_user_base_token_balance_before_swap_quote_for_base = base_token_contract
+        .balance_of(wallet.address())
+        .call()
+        .await?;
+    let initial_user_quote_token_balance_before_swap_quote_for_base = quote_token_contract
+        .balance_of(wallet.address())
+        .call()
+        .await?;
+
+    // Approve contract to transfer base token
+    let pending_approve_quote_tx =
+        quote_token_contract.approve(contract_address, U256::from(quote_exchange_amount));
+    if let Some(approve_quote_receipt) = pending_approve_quote_tx.send().await?.await? {
+        println!(
+            "Approved Quote Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
+            approve_quote_receipt.transaction_hash
+        );
+    };
+
+    // Swap quote token for base token
+    let pending_swap_quote_for_base_tx = contract.swap_quote_token_for_base_token(
+        base_token_address,
+        quote_token_address,
+        U256::from(quote_exchange_amount),
+    );
+    if let Some(swap_quote_token_for_base_receipt) =
+        pending_swap_quote_for_base_tx.send().await?.await?
+    {
+        println!(
+            "Swapped Base Token For Quote Token Successfully With Signature: https://sepolia.arbiscan.io/tx/{:?}",
+            swap_quote_token_for_base_receipt.transaction_hash
+        );
+    };
+
+    // Get contract token balance after swap quote for base
+    let final_contract_base_token_balance_after_swap_quote_for_base = base_token_contract
+        .balance_of(contract_address)
+        .call()
+        .await?;
+    let final_contract_quote_token_balance_after_swap_quote_for_base = quote_token_contract
+        .balance_of(contract_address)
+        .call()
+        .await?;
+
+    // Get user token balances after swap quote for base
+    let final_user_base_token_balance_before_swap_quote_for_base = base_token_contract
+        .balance_of(wallet.address())
+        .call()
+        .await?;
+    let final_user_quote_token_balance_before_swap_quote_for_base = quote_token_contract
+        .balance_of(wallet.address())
+        .call()
+        .await?;
+
+    // assert correct contract balance change
+    assert_eq!(
+        final_contract_base_token_balance_after_swap_quote_for_base,
+        initial_contract_base_token_balance_before_swap_quote_for_base - base_exchange_amount
+    );
+    assert_eq!(
+        final_contract_quote_token_balance_after_swap_quote_for_base,
+        initial_contract_quote_token_balance_before_swap_quote_for_base + quote_exchange_amount
+    );
+
+    // assert correct user balance change
+    assert_eq!(
+        final_user_base_token_balance_before_swap_quote_for_base,
+        initial_user_base_token_balance_before_swap_quote_for_base + base_exchange_amount
+    );
+    assert_eq!(
+        final_user_quote_token_balance_before_swap_quote_for_base,
+        initial_user_quote_token_balance_before_swap_quote_for_base - quote_exchange_amount
     );
 
     Ok(())
