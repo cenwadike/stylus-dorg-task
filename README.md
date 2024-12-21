@@ -2,8 +2,8 @@
 
 The project implements a fixed-cost token sales contract.
 
-- User can create new market.
-- Market stores the base token, quote token and exchange rate.
+- User can create a new market.
+- Market stores the base token, quote token, and exchange rate.
 - User can swap base token for quote token.
 - User can swap quote token for base token.
 
@@ -122,7 +122,7 @@ git clone https://github.com/cenwadike/stylus-dorg-task && cd stylus-dorg-task
 
 ### Testnet Information
 
-All testnet information, including faucets and RPC endpoints can be found [here](https://docs.arbitrum.io/stylus/reference/testnet-information).
+All testnet information, including faucets and RPC endpoints, can be found [here](https://docs.arbitrum.io/stylus/reference/testnet-information).
 
 ### ABI Export
 
@@ -184,15 +184,15 @@ To set up the project you need to deploy the following contract:
 ### Funding
 
 To prepare fixed-cost token sales contract, you need to fund the
-user address with sufficient amount of quote token.
+user address with a sufficient amount of base tokens and quote tokens.
 
 ## Calling The Program
 
-This project includes an rust script of how to call and transact with the program in Rust using [ethers-rs](https://github.com/gakonst/ethers-rs) under the `examples/simulation.rs`.
+This project includes a rust script of how to call and transact with the program in Rust using [ethers-rs](https://github.com/gakonst/ethers-rs) under the `examples/simulation.rs`.
 
 By using the program address from your deployment step above, and your wallet, you can attempt to call the program:
 
-Add **private-key.txt** file containing private key of an arbitrum testnet account.
+Add a `private-key.txt` file containing the private key of an arbitrum testnet account.
 
 Before running, set the following env vars or place them in a `.env` file (see: [.env.example](./.env.example)) in this project:
 
